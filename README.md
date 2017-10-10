@@ -4,7 +4,7 @@
 
     # install the latest version of terraform https://www.terraform.io/downloads.html
     # configure AWS API credentials https://www.terraform.io/docs/providers/aws/#environment-variables
-    git clone https://github.com/kam1kaze/rsyslog-poc && cd rsyslog-poc
+    git clone https://github.com/kam1kaze/rsyslog-poc && cd rsyslog-poc/terraform
     terraform init
     terraform plan -out=tfplan
     terraform apply tfplan
