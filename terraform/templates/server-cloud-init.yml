@@ -1,0 +1,51 @@
+#cloud-config
+ssh_authorized_keys:
+  - ${key_pairs}
+coreos:
+  units:
+    - name: rsyslog-server.service
+      command: start
+      runtime: true
+      content: |
+        [Unit]
+        Description=Rsyslog Server
+        Requires=docker.socket data-logs.mount
+        After=docker.socket data-logs.mount
+
+        [Service]
+        Environment=SERVICE=rsyslog-server
+        Environment=DOCKER_NAME=kam1kaze/rsyslog-server
+        Environment=VERSION=latest
+        Restart=on-failure
+        RestartSec=30
+        ExecStartPre=-/usr/bin/docker kill $${SERVICE}
+        ExecStartPre=-/usr/bin/docker rm $${SERVICE}
+        ExecStartPre=/usr/bin/docker pull $${DOCKER_NAME}:$${VERSION}
+        ExecStartPre=/usr/bin/install -d -g 0 -o 0 -m 700 /data/logs
+        ExecStart=/usr/bin/docker run --name $${SERVICE} \
+                                      --volume=/data/logs:/var/log \
+                                      --publish=514:514 \
+                                      --publish=514:514/udp \
+                                      $${DOCKER_NAME}:$${VERSION}
+    - name: format-ebs-volume.service
+      runtime: true
+      content: |
+        [Unit]
+        Description=Formats the ebs volume if needed
+        Before=docker.service
+
+        [Service]
+        Environment=VOLUME=/dev/xvdb
+        Type=oneshot
+        ExecStart=/bin/bash -xc '(blkid -t TYPE=ext4 | grep -F ^$VOLUME) || (wipefs -fa $VOLUME && mkfs.ext4 $VOLUME)'
+    - name: data-logs.mount
+      runtime: true
+      content: |
+        [Unit]
+        Description=Mount ephemeral to /data/logs
+        Requires=format-ebs-volume.service
+        After=format-ebs-volume.service
+        [Mount]
+        What=/dev/xvdb
+        Where=/data/logs
+        Type=ext4
