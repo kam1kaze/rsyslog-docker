@@ -1,0 +1,29 @@
+#cloud-config
+ssh_authorized_keys:
+  - ${key_pairs}
+coreos:
+  units:
+    - name: rsyslog-relay-server.service
+      command: start
+      runtime: true
+      content: |
+        [Unit]
+        Description=Rsyslog Relay Server
+        Requires=docker.socket
+        After=docker.socket
+
+        [Service]
+        Environment=SERVICE=rsyslog-relay-server
+        Environment=DOCKER_NAME=kam1kaze/rsyslog
+        Environment=VERSION=latest
+        Restart=on-failure
+        RestartSec=30
+        ExecStartPre=-/usr/bin/docker kill $${SERVICE}
+        ExecStartPre=-/usr/bin/docker rm $${SERVICE}
+        ExecStartPre=/usr/bin/docker pull $${DOCKER_NAME}:$${VERSION}
+        ExecStart=/usr/bin/docker run --name $${SERVICE} \
+                                      --env ROLE=relay \
+                                      --env RSYSLOG_FORWARD_IP=${rsyslog_storage_ip} \
+                                      --env RSYSLOG_FORWARD_PROTOCOL=tcp \
+                                      --publish=514:514/udp \
+                                      $${DOCKER_NAME}:$${VERSION}

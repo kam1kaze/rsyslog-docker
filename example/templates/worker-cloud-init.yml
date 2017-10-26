@@ -3,18 +3,18 @@ ssh_authorized_keys:
   - ${key_pairs}
 coreos:
   units:
-    - name: rsyslog-proxy.service
+    - name: rsyslog-collector.service
       command: start
       runtime: true
       content: |
         [Unit]
-        Description=Rsyslog Proxy Server
+        Description=Rsyslog Collector Server
         Requires=docker.socket
         After=docker.socket
 
         [Service]
-        Environment=SERVICE=rsyslog-proxy
-        Environment=DOCKER_NAME=kam1kaze/rsyslog-proxy
+        Environment=SERVICE=rsyslog-collector
+        Environment=DOCKER_NAME=kam1kaze/rsyslog
         Environment=VERSION=latest
         Restart=on-failure
         RestartSec=30
@@ -23,7 +23,10 @@ coreos:
         ExecStartPre=/usr/bin/docker pull $${DOCKER_NAME}:$${VERSION}
         ExecStartPre=/usr/bin/install -d -g 0 -o 0 -m 700 /data/logs
         ExecStart=/usr/bin/docker run --name $${SERVICE} \
-                                      -e REMOTE_ADDR=${rsyslog_remote_address} \
+                                      -v /data/logs:/var/log \
+                                      --env ROLE=collector \
+                                      --env RSYSLOG_FORWARD_IP=${rsyslog_relay_ip} \
+                                      --env RSYSLOG_FORWARD_PROTOCOL=udp \
                                       $${DOCKER_NAME}:$${VERSION}
     - name: nginx.service
       command: start
@@ -31,8 +34,8 @@ coreos:
       content: |
         [Unit]
         Description=Nginx Test Daemon
-        Requires=docker.socket rsyslog-proxy.service
-        After=docker.socket rsyslog-proxy.service
+        Requires=docker.socket rsyslog-collector.service
+        After=docker.socket rsyslog-collector.service
 
         [Service]
         Environment=SERVICE=nginx
@@ -44,7 +47,7 @@ coreos:
         ExecStartPre=-/usr/bin/docker rm $${SERVICE}
         ExecStartPre=/usr/bin/docker pull $${DOCKER_NAME}:$${VERSION}
         ExecStart=/usr/bin/docker run --name $${SERVICE} \
-                                      --volumes-from rsyslog-proxy \
+                                      --volumes-from rsyslog-collector \
                                       -p 80:80 \
                                       $${DOCKER_NAME}:$${VERSION} \
                                       sh -xc 'mkdir -p /var/log/nginx/ && exec nginx -g "daemon off;"'
